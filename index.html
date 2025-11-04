@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>6 & 7 Celebration Game</title>
+<style>ed
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    overflow: hidden; cursor: crosshair;
+    background: radial-gradient(circle at center, #160021 0%, #000 100%);
+    font-family: sans-serif; user-select: none;
+  }
+  .digit {
+    position: absolute; font-weight: 900; pointer-events: none;
+    animation: floatUp 4s ease-out forwards;
+    -webkit-text-stroke: 1px rgba(255,255,255,0.08);
+    mix-blend-mode: screen; text-align: center;
+  }
+  @keyframes floatUp {
+    0% { transform: translateY(0) scale(1) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(-250px) scale(1.6) rotate(720deg); opacity: 0; }
+  }
+  .pattern { background-clip: text; -webkit-background-clip: text; color: transparent; }
+  body::before {
+    content: ""; position: fixed; inset: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.04) 0%, transparent 70%);
+    background-size: 200% 200%; animation: shimmer 10s infinite linear;
+    pointer-events: none;
+  }
+  @keyframes shimmer { 0%{background-position:0 0;} 100%{background-position:100% 100%;} }
+  #musicBtn {
+    position: fixed; bottom:20px; right:20px;
+    background: linear-gradient(45deg,#8a2be2,#ff00ff,#ffd700);
+    color:white; border:none; font-weight:bold; border-radius:50px;
+    padding:12px 20px; cursor:pointer; box-shadow:0 0 10px #ff00ff,0 0 25px #ffd700;
+    transition: all 0.3s ease; display:none;
+  }
+  #musicBtn:hover { transform:scale(1.1); box-shadow:0 0 20px #ff00ff,0 0 40px #ffd700; }
+  #scoreBoard, #timer {
+    position: fixed; color:white; font-size:22px; text-shadow:0 0 10px purple; display:none;
+  }
+  #scoreBoard { top:20px; left:20px; }
+  #timer { top:20px; right:20px; }
+  #endScreen {
+    position: fixed; inset:0; background: rgba(0,0,0,0.85); color:white; font-size:32px;
+    display:none; justify-content:center; align-items:center; text-align:center; flex-direction:column; z-index:9999;
+  }
+  #endScreen button {
+    margin-top:20px; padding:10px 20px; font-size:20px; cursor:pointer; border-radius:10px;
+    border:none; background: linear-gradient(45deg,#8a2be2,#ff00ff,#ffd700); color:white;
+    box-shadow:0 0 10px #ff00ff,0 0 25px #ffd700;
+  }
+  #playButton {
+    position: fixed; inset:0; display:flex; justify-content:center; align-items:center;
+    background: radial-gradient(circle at center, #160021 0%, #000 100%); z-index:10000;
+  }
+  #playButton button {
+    font-size:30px; padding:20px 50px; border:none; border-radius:20px;
+    background:linear-gradient(45deg,#6a0dad,#9b30ff,#ff00ff); color:white; font-weight:bold;
+    box-shadow:0 0 25px #ff00ff,0 0 50px purple; cursor:pointer; transition: all 0.3s ease;
+  }
+  #playButton button:hover { transform:scale(1.1); box-shadow:0 0 40px #ff00ff,0 0 70px #ffd700; }
+</style>
+</head>
+<body>
+
+<div id="playButton"><button id="startBtn">PLAY</button></div>
+<div id="scoreBoard">Score: 0 | High Score: 0</div>
+<div id="timer">Time: 60</div>
+<div id="endScreen">
+  <div id="endMessage"></div>
+  <button id="restartBtn">Play Again</button>
+</div>
+<button id="musicBtn">Music: OFF</button>
+
+<script>
+document.addEventListener("DOMContentLoaded", function(){
+  // === Game Variables ===
+  const mainColors=['#b300ff','#9900ff','#cc00ff','#ff00ff','#ff69b4','#8a2be2','#4b0082','#9932cc','#ffb6c1','#ffd700','#daa520','#00ffee','#ff6600','#ff0080'];
+  const messages=['Jesus loves you!','You are loved!','Be kind!','You matter!','Shine bright!'];
+  const holidayShapes=['🎄','🎃','🎆','🎂','🎁','❄️','🌟','🎉'];
+  const specialShapes=['💜','❤️','🎵','🎶','✨'];
+  const animalPatterns=[
+    'url("https://www.transparenttextures.com/patterns/leopard.png")',
+    'url("https://www.transparenttextures.com/patterns/zebra.png")',
+    'url("https://www.transparenttextures.com/patterns/giraffe.png")'
+  ];
+
+  let score=0, highScore=parseInt(localStorage.getItem('highScore'))||0, timer=60, tapCount=0, isDragging=false, gameActive=false;
+  let gameInterval, audioCtx, mainGain, musicOn=false, interval;
+
+  const scoreBoardEl=document.getElementById('scoreBoard');
+  const startBtn=document.getElementById('startBtn');
+  const restartBtn=document.getElementById('restartBtn');
+  const endScreen=document.getElementById('endScreen');
+  const endMessage=document.getElementById('endMessage');
+  const musicBtn=document.getElementById('musicBtn');
+
+  scoreBoardEl.textContent=`Score: 0 | High Score: ${highScore}`;
+
+  // === Functions ===
+  function randomDigitOrSpecial(){
+    tapCount++;
+    if(tapCount % (10+Math.floor(Math.random()*10))!==0) return Math.random()<0.5?'6':'7';
+    const r=Math.random();
+    if(r<0.25) return holidayShapes[Math.floor(Math.random()*holidayShapes.length)];
+    if(r<0.5) return specialShapes[Math.floor(Math.random()*specialShapes.length)];
+    if(r<0.75) return '⭐';
+    return messages[Math.floor(Math.random()*messages.length)];
+  }
+
+  function addPoints(points){
+    score+=points;
+    if(score>highScore){
+      highScore=score;
+      localStorage.setItem('highScore',highScore);
+    }
+    scoreBoardEl.textContent=`Score: ${score} | High Score: ${highScore}`;
+  }
+
+  function createDigit(x,y){
+    const span=document.createElement('span');
+    span.classList.add('digit');
+    const content=randomDigitOrSpecial();
+    span.textContent=content;
+    span.style.left=x+'px';
+    span.style.top=y+'px';
+    span.style.fontSize=(Math.random()*70+20)+'px';
+    span.style.transform=`rotate(${Math.random()*360}deg)`;
+
+    const chance=Math.random();
+    if((content==='6'||content==='7')&&chance<0.02){
+      span.style.color='#ffd700';
+      span.style.textShadow='0 0 25px #ffeb7b,0 0 45px gold';
+    } else if(chance<0.9){
+      const color=mainColors[Math.floor(Math.random()*mainColors.length)];
+      span.style.color=color;
+      span.style.textShadow=`0 0 10px ${color},0 0 25px ${color}`;
+    } else {
+      const pattern=animalPatterns[Math.floor(Math.random()*animalPatterns.length)];
+      span.classList.add('pattern');
+      span.style.backgroundImage=pattern;
+      span.style.backgroundSize='contain';
+      span.style.webkitBackgroundClip='text';
+      span.style.color='transparent';
+      span.style.filter='drop-shadow(0 0 10px purple)';
+    }
+
+    document.body.appendChild(span);
+    setTimeout(()=>span.remove(),4200);
+
+    if(content!=='6'&&content!=='7') addPoints(2);
+    else addPoints(1);
+  }
+
+  function spawnAtMouse(e){
+    const x=e.clientX||(e.touches&&e.touches[0].clientX);
+    const y=e.clientY||(e.touches&&e.touches[0].clientY);
+    let shapesToSpawn=Math.max(1,6-Math.floor(highScore/10));
+    for(let i=0;i<shapesToSpawn;i++){
+      const offsetX=x+(Math.random()-0.5)*200;
+      const offsetY=y+(Math.random()-0.5)*200;
+      createDigit(offsetX,offsetY);
+    }
+  }
+
+  function startTimer(){
+    gameInterval=setInterval(()=>{
+      timer--;
+      document.getElementById('timer').textContent='Time: '+timer;
+      if(timer<=0) endGame();
+    },1000);
+  }
+
+  function endGame(){
+    clearInterval(gameInterval);
+    gameActive=false;
+    endScreen.style.display='flex';
+    let message=`Time's up!\nYour score: ${score}`;
+    if(score>=highScore) message+=`\nNew High Score! 🏆`;
+    else message+=`\nHigh Score: ${highScore}`;
+    endMessage.textContent=message;
+  }
+
+  function restartGame(){
+    endScreen.style.display='none';
+    startGame();
+  }
+
+  function startGame(){
+    document.getElementById('playButton').style.display='none';
+    scoreBoardEl.style.display='block';
+    document.getElementById('timer').style.display='block';
+    musicBtn.style.display='block';
+    score=0; timer=60; tapCount=0;
+    scoreBoardEl.textContent=`Score: 0 | High Score: ${highScore}`;
+    document.getElementById('timer').textContent='Time: '+timer;
+    gameActive=true;
+    startTimer();
+  }
+
+  function playTone(freq,duration,type='sine',volume=0.1){
+    const osc=audioCtx.createOscillator();
+    const gain=audioCtx.createGain();
+    osc.type=type;
+    osc.frequency.setValueAtTime(freq,audioCtx.currentTime);
+    gain.gain.setValueAtTime(volume,audioCtx.currentTime);
+    osc.connect(gain).connect(mainGain);
+    osc.start();
+    osc.stop(audioCtx.currentTime+duration);
+  }
+
+  function randomMelody(){
+    const notes=[261.63,293.66,329.63,392.00,440.00,523.25];
+    const freq=notes[Math.floor(Math.random()*notes.length)];
+    playTone(freq,0.3,'triangle',0.08);
+  }
+
+  function startMusic(){
+    if(!audioCtx){
+      audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+      mainGain=audioCtx.createGain();
+      mainGain.gain.value=0.3;
+      mainGain.connect(audioCtx.destination);
+    }
+    interval=setInterval(()=>randomMelody(),400);
+  }
+
+  function stopMusic(){ if(interval) clearInterval(interval); }
+
+  // === Event Listeners ===
+  document.addEventListener('mousedown',e=>{if(gameActive){isDragging=true; spawnAtMouse(e);}});
+  document.addEventListener('mouseup',()=>{isDragging=false;});
+  document.addEventListener('mousemove',e=>{if(isDragging&&gameActive) spawnAtMouse(e);});
+  document.addEventListener('touchstart',e=>{if(gameActive){isDragging=true; spawnAtMouse(e);}});
+  document.addEventListener('touchend',()=>{isDragging=false;});
+  document.addEventListener('touchmove',e=>{if(isDragging&&gameActive) spawnAtMouse(e);});
+
+  startBtn.addEventListener('click', startGame);
+  restartBtn.addEventListener('click', restartGame);
+  musicBtn.addEventListener('click', ()=>{
+    if(!musicOn){ startMusic(); musicBtn.textContent='Music: ON'; musicOn=true; }
+    else{ stopMusic(); musicBtn.textContent='Music: OFF'; musicOn=false; }
+  });
+});
+</script>
+</body>
+</html>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        >
